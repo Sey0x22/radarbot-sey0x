@@ -41,7 +41,7 @@ def _eall(e):
 
 FILE_CAMERAS = "camera.json"
 FILE_RADARS  = "radars.json"
-UPDATE_INTERVAL_MINUTES = 15
+UPDATE_INTERVAL_MINUTES = 60  # mise à jour toutes les heures
 
 # ─── État global des mises à jour ───
 import datetime
@@ -115,6 +115,20 @@ def scheduled_update():
 
 scheduler = BackgroundScheduler(daemon=True)
 scheduler.add_job(func=scheduled_update, trigger="interval", minutes=UPDATE_INTERVAL_MINUTES, id="main_update")
+
+# ─── Keep-alive : empêche Render free tier de s'endormir ───
+def _keep_alive():
+    url = os.environ.get('RENDER_EXTERNAL_URL', '').rstrip('/')
+    if not url:
+        return
+    try:
+        import urllib.request
+        urllib.request.urlopen(f"{url}/health", timeout=10)
+        logger.info("♻️ Keep-alive ping OK")
+    except Exception as e:
+        logger.warning(f"⚠️ Keep-alive ping échoué : {e}")
+
+scheduler.add_job(func=_keep_alive, trigger="interval", minutes=14, id="keep_alive")
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown())
 
@@ -468,13 +482,20 @@ def index():
 <div id="status-pill"><div id="vis-dot"></div><span id="vis-label">Surveillance active</span></div>
 
 <!-- Overlay géolocalisation -->
-<div id="geo-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(12px);flex-direction:column;align-items:center;justify-content:center;gap:20px;">
-  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:24px;padding:32px 28px;text-align:center;max-width:300px;box-shadow:0 16px 48px rgba(0,0,0,.5);">
-    <div style="font-size:48px;margin-bottom:16px;">📍</div>
-    <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px;">Localisation requise</div>
-    <div style="font-size:13px;color:var(--text2);line-height:1.5;margin-bottom:24px;">RadatBot a besoin de votre position pour afficher les radars et caméras autour de vous. Aucune donnée n'est envoyée à un serveur.</div>
-    <button onclick="startTracking()" style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;">Activer la localisation</button>
-    <button onclick="document.getElementById('geo-overlay').style.display='none'" style="width:100%;padding:10px;border-radius:12px;border:none;background:transparent;color:var(--text2);font-family:var(--font);font-size:13px;cursor:pointer;margin-top:8px;">Continuer sans GPS</button>
+<div id="geo-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(20px) saturate(180%);flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:32px;">
+  <div style="background:rgba(28,28,30,.95);border:1px solid rgba(255,255,255,.1);border-radius:28px;padding:28px 24px 20px;text-align:center;width:calc(100% - 32px);max-width:380px;box-shadow:0 24px 60px rgba(0,0,0,.6);">
+    <!-- Icone style Apple Maps -->
+    <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(145deg,#007aff,#00c6ff);margin:0 auto 18px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,122,255,.4);">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="white" opacity=".9"/>
+        <circle cx="12" cy="9" r="2.5" fill="rgba(0,122,255,1)"/>
+      </svg>
+    </div>
+    <div style="font-size:19px;font-weight:800;color:#fff;margin-bottom:6px;letter-spacing:-.3px;">Autoriser la localisation</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.55;margin-bottom:22px;">RadatBot utilise votre position pour vous alerter des radars et caméras à proximité. Votre position reste sur votre appareil.</div>
+    <!-- Bouton principal style iOS -->
+    <button onclick="startTracking()" style="width:100%;padding:15px;border-radius:14px;border:none;background:#007aff;color:#fff;font-family:var(--font);font-size:17px;font-weight:600;cursor:pointer;margin-bottom:10px;letter-spacing:-.1px;">Autoriser</button>
+    <button onclick="document.getElementById('geo-overlay').style.display='none'" style="width:100%;padding:15px;border-radius:14px;border:none;background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-family:var(--font);font-size:15px;font-weight:500;cursor:pointer;">Ignorer</button>
   </div>
 </div>
 
@@ -761,12 +782,12 @@ const vqCsex = _ogSfm ? '#0a84ff' : '#007aff';
 const vxTJifAn = _ogSfm ? 'rgba(10,132,255,.2)' : 'rgba(0,122,255,.15)';
 const icon=L.divIcon({
 className:'',
-html:`<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${vZbDVMl||0}deg)">
-<circle cx="22" cy="22" r="20" vqCsex="${vxTJifAn}" stroke="${vqCsex}" stroke-width="2.5"/>
-<circle cx="22" cy="22" r="5" vqCsex="${vqCsex}"/>
-<path d="M22 5 L29 33 L22 27 L15 33 Z" vqCsex="${vqCsex}"/>
+html:`<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" style="transform:rotate(${vZbDVMl||0}deg);filter:drop-shadow(0 2px 6px rgba(0,122,255,.5))">
+<circle cx="24" cy="24" r="22" fill="${vxTJifAn}" stroke="${vqCsex}" stroke-width="2.5"/>
+<circle cx="24" cy="24" r="7" fill="${vqCsex}"/>
+<path d="M24 4 L31 30 L24 24 L17 30 Z" fill="${vqCsex}"/>
 </svg>`,
-iconSize:[44,44], iconAnchor:[22,22]
+iconSize:[48,48], iconAnchor:[24,24]
 });
 if(!_ZjCb){
 _ZjCb=L.marker([lat,lng],{icon,zIndexOffset:9999}).addTo(map);
